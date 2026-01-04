@@ -1,2 +1,9 @@
 fastapi
 uvicorn
+python-jose
+passlib[bcrypt]
+requests
+httpx
+replicate
+python-dotenv
+python-multipart
