@@ -1,8 +1,10 @@
-import os 
+import os
 import requests
 from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
+
 from supabase import create_client, Client
 from openai import OpenAI
 from gradio_client import Client as GradioClient
@@ -27,8 +29,10 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# Qwen Image (Gradio Client) – hf_token .predict içinde verilecek
-qwen_image = GradioClient("https://qwen-qwen-image-2512.hf.space")
+qwen_image = GradioClient(
+    "Qwen/Qwen-Image-2512",
+    hf_token=HF_TOKEN
+)
 
 # =======================
 # APP
@@ -59,7 +63,9 @@ def local_llm(prompt: str) -> str:
             },
             timeout=60
         )
+
         return r.json()["choices"][0]["message"]["content"]
+
     except Exception as e:
         return f"Local model cevap veremedi: {e}"
 
@@ -94,11 +100,12 @@ def ai_response(prompt: str) -> str:
 def generate_image(prompt: str) -> str:
     result = qwen_image.predict(
         prompt,
-        api_name="/predict",
-        api_key=HF_TOKEN  # burada HF token kullanılıyor
+        api_name="/predict"
     )
+
     if isinstance(result, list):
         return result[0]
+
     return result
 
 # =======================
