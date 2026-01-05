@@ -27,6 +27,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# Gradio Client artık hf_token __init__ ile değil, login ile veriliyor
 qwen_image = GradioClient("Qwen/Qwen-Image-2512")
 qwen_image.login(hf_token=HF_TOKEN)
 
