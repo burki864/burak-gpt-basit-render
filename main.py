@@ -1,4 +1,4 @@
-import os
+import os 
 import requests
 from datetime import datetime
 from fastapi import FastAPI
@@ -27,11 +27,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# Qwen Image (Gradio Client) – .login() kaldırıldı
-qwen_image = GradioClient(
-    "https://qwen-qwen-image-2512.hf.space",
-    hf_token=HF_TOKEN
-)
+# Qwen Image (Gradio Client) – hf_token .predict içinde verilecek
+qwen_image = GradioClient("https://qwen-qwen-image-2512.hf.space")
 
 # =======================
 # APP
@@ -97,7 +94,8 @@ def ai_response(prompt: str) -> str:
 def generate_image(prompt: str) -> str:
     result = qwen_image.predict(
         prompt,
-        api_name="/predict"
+        api_name="/predict",
+        api_key=HF_TOKEN  # burada HF token kullanılıyor
     )
     if isinstance(result, list):
         return result[0]
