@@ -27,9 +27,11 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# Gradio Client artık hf_token __init__ ile değil, login ile veriliyor
-qwen_image = GradioClient("Qwen/Qwen-Image-2512")
-qwen_image.login(hf_token=HF_TOKEN)
+# Qwen Image (Gradio Client) – .login() kaldırıldı
+qwen_image = GradioClient(
+    "https://qwen-qwen-image-2512.hf.space",
+    hf_token=HF_TOKEN
+)
 
 # =======================
 # APP
@@ -60,9 +62,7 @@ def local_llm(prompt: str) -> str:
             },
             timeout=60
         )
-
         return r.json()["choices"][0]["message"]["content"]
-
     except Exception as e:
         return f"Local model cevap veremedi: {e}"
 
@@ -99,10 +99,8 @@ def generate_image(prompt: str) -> str:
         prompt,
         api_name="/predict"
     )
-
     if isinstance(result, list):
         return result[0]
-
     return result
 
 # =======================
