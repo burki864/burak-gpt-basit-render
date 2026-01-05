@@ -16,9 +16,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
-LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL")
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL")  # http://127.0.0.1:8000
 
-HF_TOKEN = os.getenv("HF_TOKEN")  # opsiyonel ama önerilir
+HF_TOKEN = os.getenv("HF_TOKEN")  # Qwen Image için önerilir
 
 # =======================
 # CLIENTS
@@ -38,21 +38,34 @@ qwen_image = GradioClient(
 app = FastAPI(title="BurakGPT")
 
 # =======================
-# LOCAL LLM (REAL)
+# LOCAL LLM (llama.cpp SERVER)
 # =======================
 def local_llm(prompt: str) -> str:
     try:
         r = requests.post(
-            LOCAL_LLM_URL,
+            f"{LOCAL_LLM_URL}/v1/chat/completions",
             json={
-                "prompt": prompt,
-                "n_predict": 256
+                "model": "local-model",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Sen BurakGPT'sin. Türkçe konuşur, samimi, kısa ve net cevaplar verirsin."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 256
             },
-            timeout=30
+            timeout=60
         )
-        return r.json().get("content", "Local model cevap veremedi.")
-    except Exception:
-        return "Local model şu an meşgul."
+
+        return r.json()["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        return f"Local model cevap veremedi: {e}"
 
 # =======================
 # AI ROUTER
@@ -63,13 +76,20 @@ def ai_response(prompt: str) -> str:
             res = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Sen BurakGPT isimli yardımcı bir yapay zekasın."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "Sen BurakGPT isimli yardımcı bir yapay zekasın."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
                 ]
             )
             return res.choices[0].message.content
         except Exception:
             return local_llm(prompt)
+
     return local_llm(prompt)
 
 # =======================
@@ -83,17 +103,21 @@ def generate_image(prompt: str) -> str:
 
     if isinstance(result, list):
         return result[0]
+
     return result
 
 # =======================
 # BAN CHECK
 # =======================
 def is_user_banned(username: str) -> bool:
-    res = supabase.table("users") \
-        .select("banned_until") \
-        .eq("username", username) \
-        .single() \
+    res = (
+        supabase
+        .table("users")
+        .select("banned_until")
+        .eq("username", username)
+        .single()
         .execute()
+    )
 
     if not res.data:
         return False
@@ -103,6 +127,7 @@ def is_user_banned(username: str) -> bool:
         return datetime.utcnow() < datetime.fromisoformat(
             banned_until.replace("Z", "")
         )
+
     return False
 
 # =======================
@@ -112,7 +137,7 @@ def is_user_banned(username: str) -> bool:
 async def home():
     if os.path.exists("index.html"):
         return open("index.html", encoding="utf-8").read()
-    return "<h2>BurakGPT Online</h2>"
+    return "<h2>🤖 BurakGPT Online</h2>"
 
 # =======================
 # CHECK USER
