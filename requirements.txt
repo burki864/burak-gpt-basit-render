@@ -11,3 +11,4 @@ flask
 supabase
 gunicorn
 openai
+gradio_client
