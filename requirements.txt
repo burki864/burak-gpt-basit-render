@@ -13,3 +13,4 @@ jinja2
 httpx
 tenacity
 orjson
+gunicorn
