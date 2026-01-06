@@ -1,6 +1,6 @@
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +49,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 qwen_image = GradioClient("Qwen/Qwen-Image-2512")
 
 # ======================
-# ROLE SYSTEM (BİREBİR)
+# ROLE SYSTEM
 # ======================
 
 def get_role(password: str):
@@ -62,7 +62,7 @@ def get_role(password: str):
     return None
 
 # ======================
-# BAN CHECK (DOĞRU)
+# BAN CHECK
 # ======================
 
 def is_user_banned(username: str) -> bool:
@@ -182,7 +182,7 @@ def image_handler(username, prompt):
     return url, "✅ Görsel oluşturuldu"
 
 # ======================
-# UI (LOGIN + CHAT)
+# UI
 # ======================
 
 with gr.Blocks(title="🤖 BurakGPT", theme=gr.themes.Soft()) as demo:
@@ -220,7 +220,7 @@ with gr.Blocks(title="🤖 BurakGPT", theme=gr.themes.Soft()) as demo:
     login_btn.click(
         login,
         inputs=username_input,
-        outputs=[username	username_state, login_status, login_box, chat_box]
+        outputs=[username_state, login_status, login_box, chat_box]
     )
 
     send.click(
