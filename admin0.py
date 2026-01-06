@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from supabase import create_client
 
@@ -14,8 +14,26 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 MOD_PASSWORD = os.getenv("MOD_PASSWORD")
 MOD2_PASSWORD = os.getenv("MOD2_PASSWORD")
 
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE ENV eksik")
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-app = FastAPI(title="BurakGPT Admin Panel")
+
+app = FastAPI(
+    title="BurakGPT Admin Panel API",
+    version="1.0.0"
+)
+
+# ======================
+# ROOT (BU ÇOK ÖNEMLİ)
+# ======================
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "service": "BurakGPT Admin API",
+        "docs": "/docs"
+    }
 
 # ======================
 # AUTH
@@ -53,31 +71,35 @@ def admin_login(data: Login):
     role = get_role(data.password)
     if not role:
         raise HTTPException(status_code=401, detail="Hatalı şifre")
-    return {"role": role}
+    return {"status": "ok", "role": role}
 
 # ======================
 # USERS
 # ======================
 @app.get("/admin/users")
-def list_users(password: str):
+def list_users(password: str = Query(...)):
     auth(password)
-    response = supabase.table("users").select("*").execute()
-    return response.data if hasattr(response, "data") else response
+    res = supabase.table("users").select("*").execute()
+    return res.data
 
 # ======================
 # CHATS & MESSAGES
 # ======================
 @app.get("/admin/user/{user_id}/messages")
-def user_messages(user_id: str, password: str):
+def user_messages(user_id: str, password: str = Query(...)):
     auth(password)
-    response = supabase.table("messages").select("*").eq("user_id", user_id).execute()
-    return response.data if hasattr(response, "data") else response
+    res = supabase.table("messages") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("created_at", desc=True) \
+        .execute()
+    return res.data
 
 # ======================
 # BAN SYSTEM
 # ======================
 @app.post("/admin/ban")
-def ban_user(data: BanRequest, password: str):
+def ban_user(data: BanRequest, password: str = Query(...)):
     role = auth(password)
 
     if role == "mod":
@@ -85,31 +107,33 @@ def ban_user(data: BanRequest, password: str):
     elif role == "mod2":
         until = datetime.utcnow() + timedelta(hours=24)
     elif role == "admin":
-        until = None  # kalıcı
+        until = None
     else:
-        raise HTTPException(status_code=403, detail="Yetkiniz yok")
+        raise HTTPException(status_code=403, detail="Yetki yok")
 
-    # Ban işlemi
     supabase.table("users").update({
         "is_banned": True,
         "banned_until": until
     }).eq("id", data.user_id).execute()
 
-    # Ban log
     supabase.table("ban_logs").insert({
         "user_id": data.user_id,
         "banned_by": role,
-        "duration": "permanent" if until is None else str(until),
-        "reason": data.reason
+        "reason": data.reason,
+        "banned_until": until
     }).execute()
 
-    return {"status": "banned", "until": until}
+    return {
+        "status": "banned",
+        "role": role,
+        "until": until
+    }
 
 # ======================
 # UNBAN (ADMIN ONLY)
 # ======================
 @app.post("/admin/unban/{user_id}")
-def unban_user(user_id: str, password: str):
+def unban_user(user_id: str, password: str = Query(...)):
     role = auth(password)
     if role != "admin":
         raise HTTPException(status_code=403, detail="Sadece admin")
@@ -125,10 +149,10 @@ def unban_user(user_id: str, password: str):
 # DELETE USER (ADMIN)
 # ======================
 @app.delete("/admin/delete_user/{user_id}")
-def delete_user(user_id: str, password: str):
+def delete_user(user_id: str, password: str = Query(...)):
     role = auth(password)
     if role != "admin":
-        raise HTTPException(status_code=403, detail="Yetkiniz yok")
+        raise HTTPException(status_code=403, detail="Yetki yok")
 
     supabase.table("messages").delete().eq("user_id", user_id).execute()
     supabase.table("chats").delete().eq("user_id", user_id).execute()
