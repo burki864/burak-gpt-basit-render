@@ -5,6 +5,7 @@ python-dotenv
 supabase
 postgrest
 openai
+gradio
 gradio-client
 pydantic
 python-multipart
