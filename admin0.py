@@ -1,82 +1,133 @@
-from fastapi import FastAPI, HTTPException
-from datetime import datetime, timedelta
-from supabase import create_client
 import os
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
+from supabase import create_client
 
-app = FastAPI()
+# ======================
+# ENV
+# ======================
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+MOD_PASSWORD = os.getenv("MOD_PASSWORD")
+MOD2_PASSWORD = os.getenv("MOD2_PASSWORD")
 
-# ---------- ROLE CHECK ----------
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+app = FastAPI(title="BurakGPT Admin Panel")
 
+# ======================
+# AUTH
+# ======================
 def get_role(password: str):
-    if password == os.getenv("ADMIN_PASSWORD"):
+    if password == ADMIN_PASSWORD:
         return "admin"
-    if password == os.getenv("MOD2_PASSWORD"):
-        return "ban_admin"
-    if password == os.getenv("MOD_PASSWORD"):
+    if password == MOD_PASSWORD:
         return "mod"
+    if password == MOD2_PASSWORD:
+        return "mod2"
     return None
 
-# ---------- CHAT VIEW ----------
-
-@app.get("/panel/chat")
-def view_chat(password: str):
+def auth(password: str):
     role = get_role(password)
-    if role not in ["admin", "ban_admin", "mod"]:
+    if not role:
+        raise HTTPException(401, "Yetkisiz")
+    return role
+
+# ======================
+# MODELS
+# ======================
+class Login(BaseModel):
+    password: str
+
+class BanRequest(BaseModel):
+    user_id: str
+    reason: str = "İhlal"
+
+# ======================
+# LOGIN
+# ======================
+@app.post("/admin/login")
+def admin_login(data: Login):
+    role = get_role(data.password)
+    if not role:
+        raise HTTPException(401, "Hatalı şifre")
+    return {"role": role}
+
+# ======================
+# USERS
+# ======================
+@app.get("/admin/users")
+def list_users(password: str):
+    auth(password)
+    return supabase.table("users").select("*").execute().data
+
+# ======================
+# CHATS & MESSAGES
+# ======================
+@app.get("/admin/user/{user_id}/messages")
+def user_messages(user_id: str, password: str):
+    auth(password)
+    return supabase.table("messages").select("*").eq("user_id", user_id).execute().data
+
+# ======================
+# BAN SYSTEM
+# ======================
+@app.post("/admin/ban")
+def ban_user(data: BanRequest, password: str):
+    role = auth(password)
+
+    if role == "mod":
+        until = datetime.utcnow() + timedelta(hours=1)
+    elif role == "mod2":
+        until = datetime.utcnow() + timedelta(hours=24)
+    elif role == "admin":
+        until = None  # kalıcı
+    else:
         raise HTTPException(403)
-
-    return supabase.table("messages").select("*").order("created_at").execute().data
-
-# ---------- BAN ----------
-
-@app.post("/panel/ban")
-def ban_user(username: str, minutes: int, password: str):
-    role = get_role(password)
-
-    if role is None:
-        raise HTTPException(403)
-
-    if role == "mod" and minutes > 60:
-        raise HTTPException(403, "Mod max 1 saat ban atabilir")
-
-    if role == "ban_admin" and minutes > 1440:
-        raise HTTPException(403, "Ban admin max 1 gün")
-
-    if role == "admin":
-        pass  # limitsiz
-
-    banned_until = datetime.utcnow() + timedelta(minutes=minutes)
 
     supabase.table("users").update({
-        "banned_until": banned_until.isoformat()
-    }).eq("username", username).execute()
+        "is_banned": True,
+        "banned_until": until
+    }).eq("id", data.user_id).execute()
 
-    return {"status": "banned", "until": banned_until}
+    supabase.table("ban_logs").insert({
+        "user_id": data.user_id,
+        "banned_by": role,
+        "duration": "permanent" if until is None else str(until),
+        "reason": data.reason
+    }).execute()
 
-# ---------- UNBAN ----------
+    return {"status": "banned", "until": until}
 
-@app.post("/panel/unban")
-def unban_user(username: str, password: str):
-    role = get_role(password)
-    if role not in ["admin", "ban_admin"]:
-        raise HTTPException(403)
+# ======================
+# UNBAN (ADMIN ONLY)
+# ======================
+@app.post("/admin/unban/{user_id}")
+def unban_user(user_id: str, password: str):
+    role = auth(password)
+    if role != "admin":
+        raise HTTPException(403, "Sadece admin")
 
     supabase.table("users").update({
+        "is_banned": False,
         "banned_until": None
-    }).eq("username", username).execute()
+    }).eq("id", user_id).execute()
 
     return {"status": "unbanned"}
 
-# ---------- DELETE USER ----------
-
-@app.delete("/panel/user")
-def delete_user(username: str, password: str):
-    if get_role(password) != "admin":
+# ======================
+# DELETE USER (ADMIN)
+# ======================
+@app.delete("/admin/delete_user/{user_id}")
+def delete_user(user_id: str, password: str):
+    role = auth(password)
+    if role != "admin":
         raise HTTPException(403)
 
-    supabase.table("users").delete().eq("username", username).execute()
+    supabase.table("messages").delete().eq("user_id", user_id).execute()
+    supabase.table("chats").delete().eq("user_id", user_id).execute()
+    supabase.table("users").delete().eq("id", user_id).execute()
+
     return {"status": "deleted"}
