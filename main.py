@@ -2,9 +2,8 @@ import os
 import requests
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 
 from supabase import create_client, Client
 from openai import OpenAI
@@ -29,7 +28,7 @@ app.add_middleware(
 # ======================
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVİCE_ROLE_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # ← DÜZELTİLDİ
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -66,14 +65,17 @@ def get_role(password: str):
 # ======================
 
 def is_user_banned(username: str) -> bool:
-    res = (
-        supabase
-        .table("users")
-        .select("banned_until")
-        .eq("username", username)
-        .single()
-        .execute()
-    )
+    try:
+        res = (
+            supabase
+            .table("users")
+            .select("banned_until")
+            .eq("username", username)
+            .single()
+            .execute()
+        )
+    except Exception:
+        return False
 
     if not res.data:
         return False
@@ -236,11 +238,7 @@ with gr.Blocks(title="🤖 BurakGPT", theme=gr.themes.Soft()) as demo:
     )
 
 # ======================
-# MOUNT
+# MOUNT (ÇOK ÖNEMLİ)
 # ======================
 
 app = gr.mount_gradio_app(app, demo, path="/")
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-    return "<h2>🤖 BurakGPT Online</h2>"
