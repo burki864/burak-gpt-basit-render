@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase import create_client
 
@@ -32,7 +32,7 @@ def get_role(password: str):
 def auth(password: str):
     role = get_role(password)
     if not role:
-        raise HTTPException(401, "Yetkisiz")
+        raise HTTPException(status_code=401, detail="Yetkisiz")
     return role
 
 # ======================
@@ -52,7 +52,7 @@ class BanRequest(BaseModel):
 def admin_login(data: Login):
     role = get_role(data.password)
     if not role:
-        raise HTTPException(401, "Hatalı şifre")
+        raise HTTPException(status_code=401, detail="Hatalı şifre")
     return {"role": role}
 
 # ======================
@@ -61,7 +61,8 @@ def admin_login(data: Login):
 @app.get("/admin/users")
 def list_users(password: str):
     auth(password)
-    return supabase.table("users").select("*").execute().data
+    response = supabase.table("users").select("*").execute()
+    return response.data if hasattr(response, "data") else response
 
 # ======================
 # CHATS & MESSAGES
@@ -69,7 +70,8 @@ def list_users(password: str):
 @app.get("/admin/user/{user_id}/messages")
 def user_messages(user_id: str, password: str):
     auth(password)
-    return supabase.table("messages").select("*").eq("user_id", user_id).execute().data
+    response = supabase.table("messages").select("*").eq("user_id", user_id).execute()
+    return response.data if hasattr(response, "data") else response
 
 # ======================
 # BAN SYSTEM
@@ -85,13 +87,15 @@ def ban_user(data: BanRequest, password: str):
     elif role == "admin":
         until = None  # kalıcı
     else:
-        raise HTTPException(403)
+        raise HTTPException(status_code=403, detail="Yetkiniz yok")
 
+    # Ban işlemi
     supabase.table("users").update({
         "is_banned": True,
         "banned_until": until
     }).eq("id", data.user_id).execute()
 
+    # Ban log
     supabase.table("ban_logs").insert({
         "user_id": data.user_id,
         "banned_by": role,
@@ -108,7 +112,7 @@ def ban_user(data: BanRequest, password: str):
 def unban_user(user_id: str, password: str):
     role = auth(password)
     if role != "admin":
-        raise HTTPException(403, "Sadece admin")
+        raise HTTPException(status_code=403, detail="Sadece admin")
 
     supabase.table("users").update({
         "is_banned": False,
@@ -124,7 +128,7 @@ def unban_user(user_id: str, password: str):
 def delete_user(user_id: str, password: str):
     role = auth(password)
     if role != "admin":
-        raise HTTPException(403)
+        raise HTTPException(status_code=403, detail="Yetkiniz yok")
 
     supabase.table("messages").delete().eq("user_id", user_id).execute()
     supabase.table("chats").delete().eq("user_id", user_id).execute()
