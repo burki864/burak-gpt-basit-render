@@ -112,7 +112,7 @@ def local_llm(prompt: str) -> str:
             json={
                 "model": "local-model",
                 "messages": [
-                    {"role": "system", "content": "Sen BurakGPT'sin. Türkçe, samimi ve net cevap ver."},
+                    {"role": "system", "content": "Sen BurakGPT'sin. Türkçe, net ve kısa cevap ver."},
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.7,
@@ -144,18 +144,15 @@ def ai_response(prompt: str) -> str:
     return local_llm(prompt)
 
 # ======================
-# IMAGE
-# ======================
-
-def generate_image(prompt: str) -> str:
-    result = qwen_image.predict(prompt, api_name="/predict")
-    return result[0] if isinstance(result, list) else result
-
-# ======================
-# CHAT LOGIC
+# CHAT HANDLER (FIXED)
 # ======================
 
 def chat_handler(username, message, history):
+    history = history or []
+
+    if not message or not message.strip():
+        return history
+
     if is_user_banned(username):
         return history + [(message, "🚫 Banlısın")]
 
@@ -169,52 +166,47 @@ def chat_handler(username, message, history):
 
     return history + [(message, reply)]
 
-def image_handler(username, prompt):
-    if is_user_banned(username):
-        return None, "🚫 Banlısın"
-
-    url = generate_image(prompt)
-
-    supabase.table("images").insert({
-        "username": username,
-        "prompt": prompt,
-        "image_url": url
-    }).execute()
-
-    return url, "✅ Görsel oluşturuldu"
-
 # ======================
-# UI (PRO)
+# UI
 # ======================
 
 with gr.Blocks(
     title="BurakGPT",
-    theme=gr.themes.Soft(primary_hue="indigo"),
     css="""
     body {
         background: #0f1220;
+    }
+    .chat-wrap {
+        max-width: 900px;
+        margin: auto;
+    }
+    .input-bar {
+        position: sticky;
+        bottom: 0;
+        background: #0f1220;
+        padding: 14px;
+        border-top: 1px solid #1f2340;
     }
     """
 ) as demo:
 
     # HEADER
     gr.HTML("""
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:14px;
-        padding:14px 18px;
-        border-radius:14px;
-        background: linear-gradient(90deg, #6A5AE0, #8F85FF);
-        box-shadow: 0 15px 40px rgba(106,90,224,0.4);
-        margin-bottom:18px;
-    ">
-        <img src="/static/burakgpt_logo.png" style="width:46px;height:46px;" />
-        <div style="color:white;">
-            <div style="font-size:22px;font-weight:800;">BurakGPT</div>
-            <div style="font-size:13px;opacity:0.9;">
-                Yapay zekâ destekli sohbet platformu
-            </div>
+    <div class="chat-wrap">
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:14px;
+            padding:16px 20px;
+            border-radius:16px;
+            background:#6A5AE0;
+            color:white;
+            font-size:22px;
+            font-weight:800;
+            margin-bottom:14px;
+        ">
+            <img src="/static/burakgpt_logo.png" style="width:42px;height:42px;" />
+            BurakGPT
         </div>
     </div>
     """)
@@ -223,19 +215,15 @@ with gr.Blocks(
 
     with gr.Group(visible=True) as login_box:
         username_input = gr.Textbox(label="Kullanıcı Adı")
-        login_btn = gr.Button("Giriş Yap", variant="primary")
+        login_btn = gr.Button("Giriş Yap")
         login_status = gr.Textbox(label="Durum")
 
     with gr.Group(visible=False) as chat_box:
-        chatbot = gr.Chatbot(height=420)
-        msg = gr.Textbox(label="Mesajını yaz")
-        send = gr.Button("Gönder", variant="primary")
+        chatbot = gr.Chatbot(height=480)
 
-        gr.Markdown("### 🎨 Görsel Oluşturma")
-        img_prompt = gr.Textbox(label="Prompt")
-        img_btn = gr.Button("Oluştur")
-        img_out = gr.Image()
-        img_status = gr.Textbox(label="Durum")
+        with gr.Row(elem_classes="input-bar"):
+            msg = gr.Textbox(placeholder="Mesaj yaz...", scale=8)
+            send = gr.Button("Gönder", scale=2)
 
     def login(username):
         ok, status = register_user(username)
@@ -259,12 +247,6 @@ with gr.Blocks(
         chat_handler,
         inputs=[username_state, msg, chatbot],
         outputs=chatbot
-    )
-
-    img_btn.click(
-        image_handler,
-        inputs=[username_state, img_prompt],
-        outputs=[img_out, img_status]
     )
 
 # ======================
