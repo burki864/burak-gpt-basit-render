@@ -28,7 +28,7 @@ app.add_middleware(
 # ======================
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # ← DÜZELTİLDİ
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -184,26 +184,56 @@ def image_handler(username, prompt):
     return url, "✅ Görsel oluşturuldu"
 
 # ======================
-# UI
+# UI (PRO)
 # ======================
 
-with gr.Blocks(title="🤖 BurakGPT", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("## 🤖 **BurakGPT**\nGiriş yap ve sohbet etmeye başla")
+with gr.Blocks(
+    title="BurakGPT",
+    theme=gr.themes.Soft(primary_hue="indigo"),
+    css="""
+    body {
+        background: #0f1220;
+    }
+    """
+) as demo:
+
+    # HEADER
+    gr.HTML("""
+    <div style="
+        display:flex;
+        align-items:center;
+        gap:14px;
+        padding:14px 18px;
+        border-radius:14px;
+        background: linear-gradient(90deg, #6A5AE0, #8F85FF);
+        box-shadow: 0 15px 40px rgba(106,90,224,0.4);
+        margin-bottom:18px;
+    ">
+        <img src="/static/burakgpt_logo.png" style="width:46px;height:46px;" />
+        <div style="color:white;">
+            <div style="font-size:22px;font-weight:800;">BurakGPT</div>
+            <div style="font-size:13px;opacity:0.9;">
+                Yapay zekâ destekli sohbet platformu
+            </div>
+        </div>
+    </div>
+    """)
 
     username_state = gr.State()
 
     with gr.Group(visible=True) as login_box:
         username_input = gr.Textbox(label="Kullanıcı Adı")
-        login_btn = gr.Button("Giriş Yap")
+        login_btn = gr.Button("Giriş Yap", variant="primary")
         login_status = gr.Textbox(label="Durum")
 
     with gr.Group(visible=False) as chat_box:
-        chatbot = gr.Chatbot(height=400)
-        msg = gr.Textbox(label="Mesaj")
-        send = gr.Button("Gönder")
+        chatbot = gr.Chatbot(height=420)
+        msg = gr.Textbox(label="Mesajını yaz")
+        send = gr.Button("Gönder", variant="primary")
 
-        img_prompt = gr.Textbox(label="Görsel Prompt")
-        img_btn = gr.Button("Görsel Oluştur")
+        gr.Markdown("### 🎨 Görsel Oluşturma")
+        img_prompt = gr.Textbox(label="Prompt")
+        img_btn = gr.Button("Oluştur")
         img_out = gr.Image()
         img_status = gr.Textbox(label="Durum")
 
@@ -238,7 +268,7 @@ with gr.Blocks(title="🤖 BurakGPT", theme=gr.themes.Soft()) as demo:
     )
 
 # ======================
-# MOUNT (ÇOK ÖNEMLİ)
+# MOUNT
 # ======================
 
 app = gr.mount_gradio_app(app, demo, path="/")
